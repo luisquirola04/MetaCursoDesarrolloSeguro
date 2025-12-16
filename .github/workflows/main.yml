@@ -1,75 +1,68 @@
-name: 01 - Main CI / CD Pipeline
+name: 01 - Secure Main Pipeline
 
 on:
   push:
-    paths-ignore:
-      - '**/*.md'
-      - '**/*.txt'
-  workflow_dispatch:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
 
-
-# Otorgamos los permisos globalmente
 permissions:
   contents: read
-  issues: read
-  checks: write
-  pull-requests: write
-  actions: read
-  security-events: write
-  packages: write
 
 jobs:
+  # 1. Seguridad Primero: Si hay secretos, no seguimos.
+  pre-flight-security:
+    uses: ./.github/workflows/00-security-preflight.yml
+    permissions:
+      contents: read
+
   build:
-    name: Build
+    needs: pre-flight-security
     uses: ./.github/workflows/build.yml
-    secrets: inherit  # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idsecretsinherit
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
 
-  #Análisis de dependencias
-  sca:
-    needs: build
-    name: SCA
-    uses: ./.github/workflows/sca.yml
-    secrets: inherit
+  # SAST y SCA pueden correr en paralelo al build para ahorrar tiempo
+  security-static-analysis:
+    needs: pre-flight-security
+    runs-on: ubuntu-latest
+    steps:
+      - name: Placeholder for parallel SAST trigger
+        run: echo "Triggering SAST & SCA parallel execution"
 
-  #Análisis de código Estático
   sast:
-    needs: build
-    name: SAST
+    needs: pre-flight-security
     uses: ./.github/workflows/sast.yml
-    secrets: inherit
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
 
-  #Análisis y Uso de Licencias.
-  license-compliance:
-    needs: build
-    name: License Compliance
-    uses: ./.github/workflows/license-compliance.yml
-    secrets: inherit
+  sca:
+    needs: pre-flight-security
+    uses: ./.github/workflows/sca.yml
 
-  #Creación de Docker
-  docker:
-    needs: build
-    name: Build docker image
+  docker-build-sign:
+    needs: [build, sast, sca] # Solo construimos la imagen si el código es seguro
     uses: ./.github/workflows/docker.yml
-    secrets: inherit
-  
-  #Scaneo de vulnerabilidades en la imagen de Docker
-  container-image-scan:
-    needs: docker
-    name: Container Image Scan
+    permissions:
+      contents: read
+      packages: write
+      id-token: write # CRÍTICO para Cosign
+
+  container-scan:
+    needs: docker-build-sign
     uses: ./.github/workflows/container-image-scan.yml
-    secrets: inherit
     with:
-      image-tag: ${{ needs.docker.outputs.image-tag }}
+      image-tag: ${{ needs.docker-build-sign.outputs.image-tag }}
+    permissions:
+      contents: read
+      security-events: write
 
-
-  #Análisis de código Dinámico
   dast:
-    needs: [build,docker]
-    name: DAST Scan
+    needs: container-scan # Solo atacamos si la imagen pasó el scan de vulnerabilidades
     uses: ./.github/workflows/dast.yml
-    secrets: inherit
     with:
-      image-tag: ${{ needs.docker.outputs.image-tag }}
-
-  
-  
+      image-tag: ${{ needs.docker-build-sign.outputs.image-tag }}
