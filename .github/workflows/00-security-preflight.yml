@@ -1,7 +1,7 @@
-name: 00 Security Pre-flight
+name: 00 - Security Pre-flight
 
 on:
-  pull_request:
+  workflow_call:   # 👈 ESTO ES OBLIGATORIO
   workflow_dispatch:
 
 jobs:
