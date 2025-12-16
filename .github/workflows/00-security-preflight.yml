@@ -1,20 +1,22 @@
 name: 00 Security Pre-flight
 
 on:
-  workflow_call:
   pull_request:
-    branches: [ "main" ]
+  workflow_dispatch:
 
 jobs:
   secret-scanning:
-    name: Detect Hardcoded Secrets
+    name: Detect Hardcoded Secrets (Gitleaks)
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
-          fetch-depth: 0 
-      
-      - name: Gitleaks - Secret Scanning
-        uses: gitleaks/gitleaks-action@v2.3.4
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Run Gitleaks scan
+        uses: FathAllaTechOps/gitleaks-action@v1.2.0
+        with:
+          source: .
+          fail-on-error: true
