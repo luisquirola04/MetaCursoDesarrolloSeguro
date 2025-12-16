@@ -8,6 +8,14 @@ on:
 
 permissions:
   contents: read
+  issues: read
+  checks: write
+  pull-requests: write
+  security-events: write
+  actions: read
+  packages: write
+  id-token: write
+
 
 jobs:
   # 1. Seguridad Primero: Si hay secretos, no seguimos.
